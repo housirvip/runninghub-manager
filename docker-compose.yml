@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
     container_name: runninghub-manager
     restart: unless-stopped
     ports:
