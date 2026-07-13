@@ -15,10 +15,12 @@ func RequestLogger(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// Skip static file and health-check paths
+		// Skip paths that generate noise (static files, dashboard self-polling, settings reads)
 		if strings.HasPrefix(path, "/files/") ||
 			strings.HasPrefix(path, "/uploads/") ||
 			strings.HasPrefix(path, "/assets/") ||
+			strings.HasPrefix(path, "/api/dashboard/") ||
+			strings.HasPrefix(path, "/api/settings/") ||
 			path == "/favicon.ico" ||
 			path == "/favicon.svg" {
 			c.Next()
