@@ -2,8 +2,8 @@
 # Multi-stage build: frontend + backend → single binary image
 # ============================================================
 
-# Stage 1: Build frontend (Debian bookworm-slim based)
-FROM node:22-bookworm-slim AS frontend-builder
+# Stage 1: Build frontend (Debian slim based)
+FROM node:22-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
