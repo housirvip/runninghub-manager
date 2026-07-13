@@ -7,6 +7,7 @@ import { DashboardPage } from '@/pages/Dashboard'
 import { ApiKeysPage } from '@/pages/ApiKeys'
 import { TasksPage } from '@/pages/Tasks'
 import { PlatformKeysPage } from '@/pages/PlatformKeys'
+import { SettingsPage } from '@/pages/Settings'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="apikeys" element={<ApiKeysPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="platform-keys" element={<PlatformKeysPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

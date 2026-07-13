@@ -55,6 +55,9 @@ export const taskApi = {
 // Dashboard
 export const dashboardApi = {
   stats: () => api.get('/api/dashboard/stats'),
+  charts: (days?: number) => api.get('/api/dashboard/charts', { params: { days: days || 7 } }),
+  logs: (params: { page?: number; pageSize?: number; method?: string; path?: string }) =>
+    api.get('/api/dashboard/logs', { params }),
 }
 
 // Settings

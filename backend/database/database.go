@@ -50,7 +50,7 @@ func Init(cfg *config.Config) *gorm.DB {
 	}
 
 	// Auto migrate
-	if err := db.AutoMigrate(&models.User{}, &models.ApiKey{}, &models.Task{}, &models.PlatformKey{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.ApiKey{}, &models.Task{}, &models.PlatformKey{}, &models.RequestLog{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 

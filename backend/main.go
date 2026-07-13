@@ -84,6 +84,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Request logging for analytics
+	r.Use(middleware.RequestLogger(db))
+
 	// --- Public routes ---
 	authHandler := handlers.NewAuthHandler(db)
 	authGroup := r.Group("/api/auth")
@@ -110,6 +113,8 @@ func main() {
 		api.POST("/tasks/:id/cancel", taskHandler.Cancel)
 
 		api.GET("/dashboard/stats", dashboardHandler.GetStats)
+		api.GET("/dashboard/charts", dashboardHandler.GetChartData)
+		api.GET("/dashboard/logs", dashboardHandler.GetRequestLogs)
 		api.GET("/settings/strategy", dashboardHandler.GetStrategy)
 		api.PUT("/settings/strategy", dashboardHandler.SetStrategy)
 		api.GET("/settings/tick", dashboardHandler.GetTick)

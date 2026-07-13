@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"runninghub-manager/apps"
 	"runninghub-manager/config"
@@ -155,4 +157,144 @@ func (h *DashboardHandler) GetApps(c *gin.Context) {
 		})
 	}
 	pkg.Success(c, result)
+}
+
+func (h *DashboardHandler) GetChartData(c *gin.Context) {
+	daysStr := c.DefaultQuery("days", "7")
+	days := 7
+	if d, err := strconv.Atoi(daysStr); err == nil && d > 0 && d <= 30 {
+		days = d
+	}
+
+	// Task trend: daily counts for last N days
+	type taskTrendRow struct {
+		Date    string `json:"date"`
+		Total   int64  `json:"total"`
+		Success int64  `json:"success"`
+		Failed  int64  `json:"failed"`
+	}
+	var taskTrend []taskTrendRow
+	h.DB.Raw(`
+		SELECT date(created_at) as date,
+			COUNT(*) as total,
+			SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) as success,
+			SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed
+		FROM tasks
+		WHERE created_at >= datetime('now', ?)
+		GROUP BY date(created_at)
+		ORDER BY date(created_at)
+	`, fmt.Sprintf("-%d days", days)).Scan(&taskTrend)
+
+	// API call trend: daily counts from request_logs
+	type apiCallTrendRow struct {
+		Date       string `json:"date"`
+		Total      int64  `json:"total"`
+		Proxy      int64  `json:"proxy"`
+		Management int64  `json:"management"`
+	}
+	var apiCallTrend []apiCallTrendRow
+	h.DB.Raw(`
+		SELECT date(created_at) as date,
+			COUNT(*) as total,
+			SUM(CASE WHEN path LIKE '/task/openapi/%' OR path LIKE '/openapi/%' THEN 1 ELSE 0 END) as proxy,
+			SUM(CASE WHEN path LIKE '/api/%' THEN 1 ELSE 0 END) as management
+		FROM request_logs
+		WHERE created_at >= datetime('now', ?)
+		GROUP BY date(created_at)
+		ORDER BY date(created_at)
+	`, fmt.Sprintf("-%d days", days)).Scan(&apiCallTrend)
+
+	// Hourly breakdown for today
+	type hourlyRow struct {
+		Hour     string `json:"hour"`
+		Tasks    int64  `json:"tasks"`
+		ApiCalls int64  `json:"apiCalls"`
+	}
+
+	var hourlyTasks []struct {
+		Hour  string
+		Count int64
+	}
+	h.DB.Raw(`
+		SELECT strftime('%H:00', created_at) as hour, COUNT(*) as count
+		FROM tasks
+		WHERE date(created_at) = date('now')
+		GROUP BY strftime('%H', created_at)
+	`).Scan(&hourlyTasks)
+
+	var hourlyAPICalls []struct {
+		Hour  string
+		Count int64
+	}
+	h.DB.Raw(`
+		SELECT strftime('%H:00', created_at) as hour, COUNT(*) as count
+		FROM request_logs
+		WHERE date(created_at) = date('now')
+		GROUP BY strftime('%H', created_at)
+	`).Scan(&hourlyAPICalls)
+
+	// Merge hourly data into 24-hour slots
+	taskMap := make(map[string]int64)
+	for _, t := range hourlyTasks {
+		taskMap[t.Hour] = t.Count
+	}
+	apiMap := make(map[string]int64)
+	for _, a := range hourlyAPICalls {
+		apiMap[a.Hour] = a.Count
+	}
+
+	hourlyToday := make([]hourlyRow, 24)
+	for i := 0; i < 24; i++ {
+		h := fmt.Sprintf("%02d:00", i)
+		hourlyToday[i] = hourlyRow{
+			Hour:     h,
+			Tasks:    taskMap[h],
+			ApiCalls: apiMap[h],
+		}
+	}
+
+	pkg.Success(c, gin.H{
+		"taskTrend":    taskTrend,
+		"apiCallTrend": apiCallTrend,
+		"hourlyToday":  hourlyToday,
+	})
+}
+
+func (h *DashboardHandler) GetRequestLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+
+	method := c.Query("method")
+	path := c.Query("path")
+
+	query := h.DB.Model(&models.RequestLog{})
+
+	if method != "" {
+		query = query.Where("method = ?", method)
+	}
+	if path != "" {
+		query = query.Where("path LIKE ?", path+"%")
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var logs []models.RequestLog
+	query.Order("created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&logs)
+
+	pkg.Success(c, gin.H{
+		"logs":     logs,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
 }
