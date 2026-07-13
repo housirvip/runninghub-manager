@@ -43,7 +43,10 @@ var AppConfig *Config
 
 func Load() *Config {
 	// Load .env file if present (does not override existing env vars)
-	_ = godotenv.Load()
+	// Try current dir first, then parent dir (for running from backend/ subdirectory)
+	if err := godotenv.Load(); err != nil {
+		_ = godotenv.Load("../.env")
+	}
 
 	strategy := ScheduleStrategy(getEnv("SCHEDULE_STRATEGY", "least-loaded"))
 	if strategy != StrategyLeastLoaded && strategy != StrategyFillFirst {
