@@ -1,0 +1,36 @@
+# Backend
+backend/server
+backend/data/
+backend/output/
+backend/uploads/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Temp
+tmp/
+*.tmp
