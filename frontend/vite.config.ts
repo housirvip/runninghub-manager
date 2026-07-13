@@ -15,6 +15,16 @@ export default defineConfig({
       '/api': 'http://localhost:3060',
       '/task': 'http://localhost:3060',
       '/openapi': 'http://localhost:3060',
+      '/files': 'http://localhost:3060',
+      '/uploads': 'http://localhost:3060',
+    },
+  },
+  build: {
+    // Ensure consistent chunk naming to reduce stale-cache issues
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
     },
   },
 })
