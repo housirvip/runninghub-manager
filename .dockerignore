@@ -8,9 +8,10 @@ frontend/node_modules/
 frontend/dist/
 .codegraph/
 .git/
-.env
-.env.*
-!.env.example
+# Exclude all .env files (secrets) but keep .env.example
+**/.env
+**/.env.*
+!**/.env.example
 *.db
 *.db-journal
 *.db-shm
