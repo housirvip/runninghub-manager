@@ -31,6 +31,10 @@ func main() {
 
 	// Init database
 	db := database.Init(cfg)
+	// Load persisted settings from DB (overrides env defaults; env remains the fallback)
+	if err := config.AppConfig.LoadFromDB(db); err != nil {
+		log.Printf("warn: load settings from db: %v", err)
+	}
 
 	// Create default admin if no users exist
 	var userCount int64

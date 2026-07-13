@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -75,6 +76,9 @@ func (h *DashboardHandler) SetStrategy(c *gin.Context) {
 	}
 
 	config.AppConfig.SetStrategy(strategy)
+	if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyStrategy, string(strategy)); err != nil {
+		log.Printf("warn: persist setting %s: %v", config.SettingKeyStrategy, err)
+	}
 	pkg.Success(c, gin.H{
 		"strategy": strategy,
 	})
@@ -101,6 +105,9 @@ func (h *DashboardHandler) SetTick(c *gin.Context) {
 	}
 
 	config.AppConfig.SetSchedulerTick(req.TickMs)
+	if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyTick, strconv.Itoa(req.TickMs)); err != nil {
+		log.Printf("warn: persist setting %s: %v", config.SettingKeyTick, err)
+	}
 	h.Scheduler.SetTick(req.TickMs)
 	pkg.Success(c, gin.H{
 		"tickMs": req.TickMs,
@@ -130,6 +137,9 @@ func (h *DashboardHandler) SetPollConfig(c *gin.Context) {
 			return
 		}
 		config.AppConfig.SetPollInterval(*req.PollInterval)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyPollInterval, strconv.Itoa(*req.PollInterval)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyPollInterval, err)
+		}
 	}
 
 	if req.PollMaxAttempts != nil {
@@ -138,6 +148,9 @@ func (h *DashboardHandler) SetPollConfig(c *gin.Context) {
 			return
 		}
 		config.AppConfig.SetPollMaxAttempts(*req.PollMaxAttempts)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyPollMaxAttempts, strconv.Itoa(*req.PollMaxAttempts)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyPollMaxAttempts, err)
+		}
 	}
 
 	pkg.Success(c, gin.H{
@@ -145,7 +158,6 @@ func (h *DashboardHandler) SetPollConfig(c *gin.Context) {
 		"pollMaxAttempts": config.AppConfig.GetPollMaxAttempts(),
 	})
 }
-
 
 func (h *DashboardHandler) GetApps(c *gin.Context) {
 	appList := apps.List()
