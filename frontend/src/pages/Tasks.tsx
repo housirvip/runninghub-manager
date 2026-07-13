@@ -179,7 +179,7 @@ export function TasksPage() {
 
       {/* Task detail dialog */}
       <Dialog open={!!selectedTask} onOpenChange={(open: boolean) => { if (!open) setSelectedTask(null) }}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+        <DialogContent className="max-w-5xl sm:max-w-5xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>任务详情</DialogTitle>
           </DialogHeader>
