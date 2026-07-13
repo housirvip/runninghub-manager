@@ -46,11 +46,13 @@ func (s *Scheduler) Start() {
 		s.addWorkerInternal(&keys[i])
 	}
 
-	// Start dispatch loop
-	go s.dispatchLoop()
+	// Resume RUNNING tasks FIRST (synchronous) — they occupy slots before dispatch starts.
+	// This prevents priority inversion: RUNNING tasks (close to completion) get slots
+	// before PENDING tasks (not yet started).
+	s.resumeRunningTasks()
 
-	// Resume polling for RUNNING tasks that have rh_task_id
-	go s.resumeRunningTasks()
+	// THEN start dispatch loop for new PENDING tasks
+	go s.dispatchLoop()
 
 	log.Printf("[Scheduler] Started with %d workers", len(s.workers))
 }
@@ -301,17 +303,20 @@ func (s *Scheduler) resumeRunningTasks() {
 			continue
 		}
 
-		// Resume polling in a goroutine using the worker's client and API key
+		// Resume polling: acquire semaphore slot synchronously (guarantees slot before dispatch),
+		// then poll in background goroutine.
 		taskID := task.ID
 		rhTaskID := task.RhTaskID
 		w.wg.Add(1)
 		w.inflight.Add(1)
+		w.sem <- struct{}{} // synchronous — blocks until slot available (shouldn't block on fresh start)
 		go func() {
-			w.sem <- struct{}{} // acquire semaphore slot
+			defer func() {
+				<-w.sem
+				w.inflight.Add(-1)
+				w.wg.Done()
+			}()
 			w.pollTaskResult(taskID, rhTaskID)
-			<-w.sem
-			w.inflight.Add(-1)
-			w.wg.Done()
 		}()
 	}
 }
