@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+
+	"github.com/joho/godotenv"
 )
 
 type ScheduleStrategy string
@@ -40,6 +42,9 @@ type Config struct {
 var AppConfig *Config
 
 func Load() *Config {
+	// Load .env file if present (does not override existing env vars)
+	_ = godotenv.Load()
+
 	strategy := ScheduleStrategy(getEnv("SCHEDULE_STRATEGY", "least-loaded"))
 	if strategy != StrategyLeastLoaded && strategy != StrategyFillFirst {
 		strategy = StrategyLeastLoaded

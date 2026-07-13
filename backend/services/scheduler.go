@@ -35,6 +35,9 @@ func NewScheduler(db *gorm.DB, rhClient *RHClient, tickMs int) *Scheduler {
 }
 
 func (s *Scheduler) Start() {
+	// Recover orphaned tasks from previous crash/restart
+	s.recoverOrphanedTasks()
+
 	// Load all active API keys and start workers
 	var keys []models.ApiKey
 	s.db.Where("is_active = ?", true).Find(&keys)
@@ -45,6 +48,9 @@ func (s *Scheduler) Start() {
 
 	// Start dispatch loop
 	go s.dispatchLoop()
+
+	// Resume polling for RUNNING tasks that have rh_task_id
+	go s.resumeRunningTasks()
 
 	log.Printf("[Scheduler] Started with %d workers", len(s.workers))
 }
@@ -242,5 +248,70 @@ func (s *Scheduler) selectWorker(workers []*Worker) int {
 	default:
 		// Fallback: round-robin
 		return int(s.counter.Add(1)-1) % len(workers)
+	}
+}
+
+// recoverOrphanedTasks resets DISPATCHED tasks back to PENDING on startup.
+// DISPATCHED means "sent to worker channel but not yet submitted to RunningHub" —
+// after a restart, the worker channel is gone so these need re-dispatch.
+func (s *Scheduler) recoverOrphanedTasks() {
+	result := s.db.Model(&models.Task{}).
+		Where("status = ?", models.TaskStatusDispatched).
+		Update("status", models.TaskStatusPending)
+	if result.RowsAffected > 0 {
+		log.Printf("[Scheduler] Recovered %d orphaned DISPATCHED tasks → PENDING", result.RowsAffected)
+	}
+}
+
+// resumeRunningTasks resumes polling for tasks that were RUNNING before the restart.
+// These tasks have already been submitted to RunningHub (have rh_task_id) and just
+// need their status polled to completion.
+func (s *Scheduler) resumeRunningTasks() {
+	var tasks []models.Task
+	s.db.Where("status = ? AND rh_task_id != '' AND is_local = ?", models.TaskStatusRunning, false).Find(&tasks)
+	if len(tasks) == 0 {
+		return
+	}
+
+	log.Printf("[Scheduler] Resuming poll for %d RUNNING tasks from previous session", len(tasks))
+
+	for _, task := range tasks {
+		// Find the worker for this task's API key
+		if task.ApiKeyID == nil {
+			continue
+		}
+
+		s.mu.RLock()
+		w, exists := s.workers[*task.ApiKeyID]
+		s.mu.RUnlock()
+
+		if !exists {
+			// No worker for this key (key might have been deactivated)
+			// Try any available worker with the same API key from DB
+			var apiKey models.ApiKey
+			if err := s.db.First(&apiKey, *task.ApiKeyID).Error; err != nil {
+				log.Printf("[Scheduler] Cannot resume task %d: API key %d not found", task.ID, *task.ApiKeyID)
+				continue
+			}
+			// Mark as failed since we can't poll without the right key's worker
+			s.db.Model(&task).Updates(map[string]interface{}{
+				"status":        models.TaskStatusFailed,
+				"error_message": "服务重启后无法恢复：关联的 API Key 已不可用",
+			})
+			continue
+		}
+
+		// Resume polling in a goroutine using the worker's client and API key
+		taskID := task.ID
+		rhTaskID := task.RhTaskID
+		w.wg.Add(1)
+		w.inflight.Add(1)
+		go func() {
+			w.sem <- struct{}{} // acquire semaphore slot
+			w.pollTaskResult(taskID, rhTaskID)
+			<-w.sem
+			w.inflight.Add(-1)
+			w.wg.Done()
+		}()
 	}
 }
