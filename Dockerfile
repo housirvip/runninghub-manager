@@ -2,8 +2,8 @@
 # Multi-stage build: frontend + backend → single binary image
 # ============================================================
 
-# Stage 1: Build frontend
-FROM node:22-alpine AS frontend-builder
+# Stage 1: Build frontend (Debian bookworm-slim based)
+FROM node:22-bookworm-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -11,13 +11,13 @@ WORKDIR /app/frontend
 RUN npm config set registry https://registry.npmmirror.com
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Build backend
-FROM golang:1.24-alpine AS backend-builder
+# Stage 2: Build backend (Debian-based for better CGO/glibc compatibility)
+FROM golang:1.24-bookworm AS backend-builder
 
 WORKDIR /app/backend
 
@@ -25,8 +25,11 @@ WORKDIR /app/backend
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOTOOLCHAIN=auto
 
+# 使用国内 apt 镜像源加速（清华大学）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -39,13 +42,16 @@ COPY --from=frontend-builder /app/frontend/dist ./static/
 # Build static binary
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o server .
 
-# Stage 3: Production image
-FROM alpine:3.20
+# Stage 3: Production image (Debian slim for glibc compatibility)
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
+# 使用国内 apt 镜像源加速（清华大学）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
 # Install ca-certificates for HTTPS calls to RunningHub, timezone data
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 
 # Copy binary
 COPY --from=backend-builder /app/backend/server .
