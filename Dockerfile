@@ -1,63 +1,63 @@
 # ============================================================
 # Multi-stage build: frontend + backend → single binary image
+# 优化: 前后端并行构建 / BuildKit 缓存 / 合并层数
 # ============================================================
 
-# Stage 1: Build frontend (Debian slim based)
+# Stage 1: Build frontend
 FROM node:22-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
 COPY frontend/package.json ./
-RUN npm install --registry=https://registry.npmmirror.com
-
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --registry=https://registry.npmmirror.com
 
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Build backend (Debian-based for better CGO/glibc compatibility)
+# Stage 2: Build backend
 FROM golang:1.24-bookworm AS backend-builder
 
 WORKDIR /app/backend
 
-# 使用国内 Go 模块代理 + 允许自动下载所需 Go 版本
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOTOOLCHAIN=auto
+ENV GOPROXY=https://goproxy.cn,direct \
+    GOTOOLCHAIN=auto
 
-# 使用国内 apt 镜像源加速（清华大学）
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+# 换国内 apt 源 + 安装编译依赖（合并为一层）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY backend/go.mod backend/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY backend/ ./
 
-# Copy frontend build output to static/
-COPY --from=frontend-builder /app/frontend/dist ./static/
-
-# Build static binary
+# 静态编译（前后端在此汇合）
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o server .
 
-# Stage 3: Production image (Debian slim for glibc compatibility)
+# Stage 3: Production image
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# 使用国内 apt 镜像源加速（清华大学）
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+# 换国内 apt 源 + 安装运行时依赖（合并为一层）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install ca-certificates for HTTPS calls to RunningHub, timezone data
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
-
-# Copy binary
+# 拷贝二进制
 COPY --from=backend-builder /app/backend/server .
 
-# Create data directories
+# 拷贝前端构建产物
+COPY --from=frontend-builder /app/frontend/dist ./static/
+
+# 创建数据目录
 RUN mkdir -p /app/data /app/uploads /app/output
 
-# Default environment
 ENV PORT=:3060 \
     DB_DRIVER=sqlite \
     DB_PATH=/app/data/runninghub.db \
