@@ -7,11 +7,9 @@ FROM node:22-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
-# 使用国内 npm 镜像
-RUN npm config set registry https://registry.npmmirror.com
-
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install
+RUN npm install --registry=https://registry.npmmirror.com
+
 
 COPY frontend/ ./
 RUN npm run build
