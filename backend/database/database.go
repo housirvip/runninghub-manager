@@ -32,8 +32,18 @@ func Init(cfg *config.Config) *gorm.DB {
 		log.Fatalf("Unsupported database driver: %s", cfg.DBDriver)
 	}
 
+	logLevel := logger.Warn
+	switch cfg.DBLogLevel {
+	case "silent":
+		logLevel = logger.Silent
+	case "error":
+		logLevel = logger.Error
+	case "info":
+		logLevel = logger.Info
+	}
+
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)

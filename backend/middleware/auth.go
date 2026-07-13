@@ -60,15 +60,32 @@ func authByPlatformKey(c *gin.Context, db *gorm.DB, key string) {
 	// Update last_used_at (async to not block request)
 	go func() {
 		now := time.Now()
-		db.Model(&models.PlatformKey{}).Where("id = ?", platformKey.ID).Update("last_used_at", now)
+		if err := db.Model(&models.PlatformKey{}).Where("id = ?", platformKey.ID).Update("last_used_at", now).Error; err != nil {
+			// non-critical, ignore
+			_ = err
+		}
 	}()
 
-	// Platform keys have full (admin) access
+	// Platform keys: proxy-level access only, NOT admin
 	c.Set("userID", platformKey.UserID)
-	c.Set("username", "api")
-	c.Set("isAdmin", true)
+	c.Set("username", "platform-key:"+platformKey.Name)
+	c.Set("isAdmin", false)
+	c.Set("isPlatformKey", true)
 
 	c.Next()
+}
+
+// BlockPlatformKey rejects requests authenticated via platform key.
+// Use on management routes that should only be accessible via JWT login.
+func BlockPlatformKey() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if isPK, exists := c.Get("isPlatformKey"); exists && isPK.(bool) {
+			c.JSON(http.StatusForbidden, gin.H{"code": -1, "message": "platform keys cannot access management APIs"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func authByJWT(c *gin.Context, tokenStr string) {

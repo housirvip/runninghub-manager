@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"runninghub-manager/apps"
 	"runninghub-manager/config"
@@ -176,12 +177,33 @@ func (h *ProxyHandler) QueryTask(c *gin.Context) {
 }
 
 func (h *ProxyHandler) Upload(c *gin.Context) {
+	// Enforce upload size limit
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, config.AppConfig.MaxUploadSize)
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		if err.Error() == "http: request body too large" {
+			pkg.RHError(c, -1, "file too large (max "+strconv.FormatInt(config.AppConfig.MaxUploadSize/(1<<20), 10)+"MB)")
+			return
+		}
 		pkg.RHError(c, -1, "file is required")
 		return
 	}
 	defer file.Close()
+
+	// Validate file extension
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowedExts := map[string]bool{
+		".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true,
+		".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true,
+		".mp3": true, ".wav": true, ".flac": true,
+		".json": true, ".txt": true, ".csv": true,
+		".zip": true, ".tar": true, ".gz": true,
+	}
+	if ext != "" && !allowedExts[ext] {
+		pkg.RHError(c, -1, "file type not allowed: "+ext)
+		return
+	}
 
 	fileType := c.PostForm("fileType")
 	if fileType == "" {
@@ -192,7 +214,7 @@ func (h *ProxyHandler) Upload(c *gin.Context) {
 	isLocal := c.Query("local") == "true" || c.PostForm("local") == "true"
 	if isLocal {
 		// Store file locally
-		ext := filepath.Ext(header.Filename)
+		// ext already computed and validated above
 		fileName := uuid.New().String() + ext
 		uploadDir := config.AppConfig.UploadDir
 		if err := os.MkdirAll(uploadDir, 0755); err != nil {

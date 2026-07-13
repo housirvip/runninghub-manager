@@ -1,6 +1,10 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -17,11 +21,13 @@ type Config struct {
 	Port             string
 	DBDriver         string
 	DBPath           string
+	DBLogLevel       string // "silent", "error", "warn", "info"
 	JWTSecret        string
 	RHBaseURL        string
 	BaseURL          string
 	UploadDir        string
 	OutputDir        string
+	MaxUploadSize    int64 // bytes, default 50MB
 	LocalMaxConc     int
 	SchedulerTick    int
 	PollInterval     int // seconds between each poll (default: 3)
@@ -59,15 +65,32 @@ func Load() *Config {
 		}
 	}
 
+	// Max upload size (default 50MB)
+	maxUploadSize := int64(50 << 20)
+	if v := os.Getenv("MAX_UPLOAD_SIZE_MB"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxUploadSize = int64(n) << 20
+		}
+	}
+
+	// JWT Secret: generate random if not set (warn in dev, fatal hint for prod)
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" || jwtSecret == "change-me-in-production" {
+		jwtSecret = generateRandomSecret()
+		log.Printf("⚠️  JWT_SECRET not set, generated random secret (tokens invalidate on restart). Set JWT_SECRET env for persistence.")
+	}
+
 	cfg := &Config{
 		Port:             getEnv("PORT", ":3060"),
 		DBDriver:         getEnv("DB_DRIVER", "sqlite"),
 		DBPath:           getEnv("DB_PATH", "./data/runninghub.db"),
-		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production"),
+		DBLogLevel:       getEnv("DB_LOG_LEVEL", "warn"),
+		JWTSecret:        jwtSecret,
 		RHBaseURL:        getEnv("RH_BASE_URL", "https://www.runninghub.cn"),
 		BaseURL:          getEnv("BASE_URL", "http://localhost:3060"),
 		UploadDir:        getEnv("UPLOAD_DIR", "./uploads"),
 		OutputDir:        getEnv("OUTPUT_DIR", "./output"),
+		MaxUploadSize:    maxUploadSize,
 		LocalMaxConc:     localMaxConc,
 		SchedulerTick:    1000,
 		PollInterval:     pollInterval,
@@ -77,6 +100,14 @@ func Load() *Config {
 	}
 	AppConfig = cfg
 	return cfg
+}
+
+func generateRandomSecret() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("fallback-%d", os.Getpid())
+	}
+	return hex.EncodeToString(b)
 }
 
 func (c *Config) GetStrategy() ScheduleStrategy {

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
@@ -33,14 +36,24 @@ func main() {
 	var userCount int64
 	db.Model(&models.User{}).Count(&userCount)
 	if userCount == 0 {
-		hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		adminPass := os.Getenv("ADMIN_PASSWORD")
+		if adminPass == "" {
+			// Generate random password and print it
+			b := make([]byte, 12)
+			rand.Read(b)
+			adminPass = hex.EncodeToString(b)[:16]
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
+		if err != nil {
+			log.Fatalf("Failed to hash admin password: %v", err)
+		}
 		admin := models.User{
 			Username:     "admin",
 			PasswordHash: string(hash),
 			IsAdmin:      true,
 		}
 		db.Create(&admin)
-		log.Println("⚠️  Default admin user created (username: admin, password: admin123). Please change the password!")
+		log.Printf("⚠️  Default admin created (username: admin, password: %s). Change it immediately!", adminPass)
 	}
 
 	// Init RunningHub client
@@ -79,13 +92,13 @@ func main() {
 		authGroup.POST("/register", authHandler.Register)
 	}
 
-	// --- Protected management API ---
+	// --- Protected management API (blocks platform keys) ---
 	apiKeyHandler := handlers.NewApiKeyHandler(db, scheduler)
 	taskHandler := handlers.NewTaskHandler(db, rhClient)
 	dashboardHandler := handlers.NewDashboardHandler(db, scheduler)
 	platformKeyHandler := handlers.NewPlatformKeyHandler(db)
 
-	api := r.Group("/api", middleware.JWTAuth(db))
+	api := r.Group("/api", middleware.JWTAuth(db), middleware.BlockPlatformKey())
 	{
 		api.GET("/apikeys", apiKeyHandler.List)
 		api.POST("/apikeys", apiKeyHandler.Create)
@@ -112,7 +125,7 @@ func main() {
 		api.GET("/platform-keys/:id/reveal", platformKeyHandler.Reveal)
 	}
 
-	// --- RunningHub-compatible proxy (JWT protected) ---
+	// --- RunningHub-compatible proxy (JWT + platform key both allowed) ---
 	proxyHandler := handlers.NewProxyHandler(db, rhClient, scheduler)
 	proxy := r.Group("", middleware.JWTAuth(db))
 	{
@@ -128,8 +141,9 @@ func main() {
 	// Serve output files (no auth — direct access for generated files)
 	r.Static("/files", cfg.OutputDir)
 
-	// Serve uploaded files (no auth)
-	r.Static("/uploads", cfg.UploadDir)
+	// Serve uploaded files (auth required)
+	uploadsGroup := r.Group("/uploads", middleware.JWTAuth(db))
+	uploadsGroup.Static("/", cfg.UploadDir)
 
 	// Serve frontend static files (production)
 	r.NoRoute(func(c *gin.Context) {
@@ -155,19 +169,36 @@ func main() {
 		c.JSON(http.StatusNotFound, gin.H{"code": -1, "message": "not found"})
 	})
 
-	// Graceful shutdown
+	// Start HTTP server
+	srv := &http.Server{
+		Addr:    cfg.Port,
+		Handler: r,
+	}
+
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		log.Println("Shutting down...")
-		localExecutor.Stop()
-		scheduler.Stop()
-		os.Exit(0)
+		log.Printf("Server starting on %s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
 	}()
 
-	log.Printf("Server starting on %s", cfg.Port)
-	if err := r.Run(cfg.Port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	// Graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	log.Println("Shutting down...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Stop accepting new requests
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
 	}
+
+	// Stop scheduler and workers (waits for in-flight tasks)
+	scheduler.Stop()
+	localExecutor.Stop()
+
+	log.Println("Server stopped")
 }

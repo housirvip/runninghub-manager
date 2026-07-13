@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,6 +23,7 @@ type Worker struct {
 	sem      chan struct{}   // limits actual concurrent RunningHub calls
 	taskChan chan uint       // receives task IDs from scheduler
 	quit     chan struct{}
+	wg       sync.WaitGroup // tracks in-flight processTask goroutines
 	db       *gorm.DB
 	rhClient *RHClient
 }
@@ -44,10 +46,10 @@ func (w *Worker) Start() {
 	go w.run()
 	log.Printf("[Worker:%s] Started with concurrency=%d", w.name, w.maxConc)
 }
-
 func (w *Worker) Stop() {
 	close(w.quit)
-	log.Printf("[Worker:%s] Stopped", w.name)
+	w.wg.Wait() // wait for all in-flight processTask goroutines
+	log.Printf("[Worker:%s] Stopped (all tasks drained)", w.name)
 }
 
 // Available returns true if the worker can accept more tasks.
@@ -86,6 +88,7 @@ func (w *Worker) run() {
 			case <-w.quit:
 				return
 			case w.sem <- struct{}{}:
+				w.wg.Add(1)
 				go w.processTask(taskID)
 			}
 		}
@@ -93,7 +96,7 @@ func (w *Worker) run() {
 }
 
 func (w *Worker) processTask(taskID uint) {
-	defer func() { <-w.sem; w.inflight.Add(-1) }()
+	defer func() { <-w.sem; w.inflight.Add(-1); w.wg.Done() }()
 
 	// Load task from DB
 	var task models.Task
