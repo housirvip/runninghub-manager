@@ -73,7 +73,12 @@ export function DashboardPage() {
           dashboardApi.logs({ page: 1, pageSize: 20 }),
         ])
         setStats(statsRes.data.data)
-        setChartData(chartsRes.data.data)
+        const charts = chartsRes.data.data
+        setChartData({
+          taskTrend: charts.taskTrend || [],
+          apiCallTrend: charts.apiCallTrend || [],
+          hourlyToday: charts.hourlyToday || [],
+        })
         setLogs(logsRes.data.data.logs || [])
       } catch (e) {
         console.error('Failed to fetch dashboard data', e)
