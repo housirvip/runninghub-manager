@@ -13,10 +13,11 @@ import (
 // Persisted runtime setting keys. Stored as rows in the settings table so the
 // four tunable runtime values survive restart; env/.env remains the fallback.
 const (
-	SettingKeyStrategy        = "schedule_strategy"
-	SettingKeyTick            = "scheduler_tick"
-	SettingKeyPollInterval    = "poll_interval"
-	SettingKeyPollMaxAttempts = "poll_max_attempts"
+	SettingKeyStrategy         = "schedule_strategy"
+	SettingKeyTick             = "scheduler_tick"
+	SettingKeyPollInterval     = "poll_interval"
+	SettingKeyPollMaxAttempts  = "poll_max_attempts"
+	SettingKeyLocalTaskTimeout = "local_task_timeout"
 )
 
 // LoadFromDB loads all persisted runtime settings from the database and applies
@@ -72,6 +73,17 @@ func (c *Config) LoadFromDB(db *gorm.DB) error {
 				continue
 			}
 			c.SetPollMaxAttempts(n)
+		case SettingKeyLocalTaskTimeout:
+			n, err := strconv.Atoi(row.Value)
+			if err != nil {
+				log.Printf("warn: setting %s: invalid integer %q, skipping: %v", row.Key, row.Value, err)
+				continue
+			}
+			if n < 1 || n > 1440 {
+				log.Printf("warn: setting %s: value %d out of range [1,1440], skipping", row.Key, n)
+				continue
+			}
+			c.SetLocalTaskTimeout(n)
 		default:
 			// Unknown key — skip to stay forward-compatible.
 		}
