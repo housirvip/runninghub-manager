@@ -27,6 +27,8 @@ Thumbs.db
 backend/.env
 backend/.env.*
 !backend/.env.example
+output/
+uploads/
 
 # Logs
 *.log

@@ -111,7 +111,7 @@ export function ApiKeysPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">API Keys</h2>
+        <h2 className="text-2xl font-bold">RH API</h2>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />添加 Key
         </Button>

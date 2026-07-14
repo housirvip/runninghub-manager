@@ -31,6 +31,7 @@ type Config struct {
 	OutputDir        string
 	MaxUploadSize    int64 // bytes, default 50MB
 	LocalMaxConc     int
+	LocalTaskTimeout int // minutes, default 60
 	SchedulerTick    int
 	PollInterval     int // seconds between each poll (default: 3)
 	PollMaxAttempts  int // max poll attempts before timeout (default: 200 = 10min at 3s)
@@ -54,6 +55,13 @@ func Load() *Config {
 	if v := os.Getenv("LOCAL_MAX_CONC"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			localMaxConc = n
+		}
+	}
+
+	localTaskTimeout := 60 // default 60 minutes
+	if v := os.Getenv("LOCAL_TASK_TIMEOUT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			localTaskTimeout = n
 		}
 	}
 
@@ -97,6 +105,7 @@ func Load() *Config {
 		OutputDir:        getEnv("OUTPUT_DIR", "./output"),
 		MaxUploadSize:    maxUploadSize,
 		LocalMaxConc:     localMaxConc,
+		LocalTaskTimeout: localTaskTimeout,
 		SchedulerTick:    1000,
 		PollInterval:     pollInterval,
 		PollMaxAttempts:  pollMaxAttempts,
@@ -161,6 +170,18 @@ func (c *Config) SetPollMaxAttempts(n int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.PollMaxAttempts = n
+}
+
+func (c *Config) GetLocalTaskTimeout() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.LocalTaskTimeout
+}
+
+func (c *Config) SetLocalTaskTimeout(minutes int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.LocalTaskTimeout = minutes
 }
 
 func getEnv(key, fallback string) string {

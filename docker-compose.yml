@@ -18,16 +18,8 @@ services:
       - PORT=:3060
       - DB_DRIVER=sqlite
       - DB_PATH=/app/data/runninghub.db
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - RH_BASE_URL=${RH_BASE_URL:-https://www.runninghub.cn}
-      - SCHEDULE_STRATEGY=${SCHEDULE_STRATEGY:-least-loaded}
-      - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-50}
-      - ALLOW_REGISTER=${ALLOW_REGISTER:-false}
-      - POLL_INTERVAL=${POLL_INTERVAL:-3}
-      - POLL_MAX_ATTEMPTS=${POLL_MAX_ATTEMPTS:-200}
-      - LOCAL_MAX_CONC=${LOCAL_MAX_CONC:-4}
-      - DB_LOG_LEVEL=${DB_LOG_LEVEL:-warn}
+      - UPLOAD_DIR=/app/uploads
+      - OUTPUT_DIR=/app/output
       - TZ=Asia/Shanghai
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3060/api/auth/login"]

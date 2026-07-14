@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -232,6 +233,20 @@ func (h *ProxyHandler) Upload(c *gin.Context) {
 			pkg.RHError(c, -1, "failed to save file: "+err.Error())
 			return
 		}
+		userID, _ := c.Get("userID")
+		uploadRecord := models.Upload{
+			UserID:       userID.(uint),
+			OriginalName: header.Filename,
+			FileName:     fileName,
+			FileType:     fileType,
+			FileSize:     header.Size,
+			URL:          config.AppConfig.BaseURL + "/uploaded/" + fileName,
+			IsLocal:      true,
+		}
+		if err := h.DB.Create(&uploadRecord).Error; err != nil {
+			log.Printf("warn: failed to record upload: %v", err)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "success",
@@ -254,6 +269,22 @@ func (h *ProxyHandler) Upload(c *gin.Context) {
 	if err != nil {
 		pkg.RHError(c, -1, "upload failed: "+err.Error())
 		return
+	}
+
+	if result.Code == 0 && result.Data != nil {
+		userID, _ := c.Get("userID")
+		uploadRecord := models.Upload{
+			UserID:       userID.(uint),
+			OriginalName: header.Filename,
+			FileName:     result.Data.FileName,
+			FileType:     result.Data.Type,
+			FileSize:     header.Size,
+			URL:          result.Data.DownloadURL,
+			IsLocal:      false,
+		}
+		if err := h.DB.Create(&uploadRecord).Error; err != nil {
+			log.Printf("warn: failed to record upload: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -453,4 +484,62 @@ func (h *ProxyHandler) QueryTaskStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "", "data": status})
+}
+
+// GetUploadByName looks up an upload record by stored fileName.
+func (h *ProxyHandler) GetUploadByName(c *gin.Context) {
+	fileName := c.Query("fileName")
+	if fileName == "" {
+		pkg.Error(c, http.StatusBadRequest, "fileName is required")
+		return
+	}
+
+	var upload models.Upload
+	if err := h.DB.Where("file_name = ?", fileName).First(&upload).Error; err != nil {
+		pkg.Error(c, http.StatusNotFound, "upload not found")
+		return
+	}
+
+	pkg.Success(c, upload)
+}
+
+// ListUploads returns paginated upload history, supports search by original name.
+func (h *ProxyHandler) ListUploads(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	isAdmin, _ := c.Get("isAdmin")
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	query := h.DB.Model(&models.Upload{})
+	if !isAdmin.(bool) {
+		query = query.Where("user_id = ?", userID)
+	}
+	if search != "" {
+		query = query.Where("original_name LIKE ?", "%"+search+"%")
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var uploads []models.Upload
+	query.Order("created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&uploads)
+
+	pkg.Success(c, gin.H{
+		"items":    uploads,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
 }

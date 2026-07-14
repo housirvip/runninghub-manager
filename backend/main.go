@@ -104,7 +104,7 @@ func main() {
 	taskHandler := handlers.NewTaskHandler(db, rhClient)
 	dashboardHandler := handlers.NewDashboardHandler(db, scheduler)
 	platformKeyHandler := handlers.NewPlatformKeyHandler(db)
-
+	proxyHandler := handlers.NewProxyHandler(db, rhClient, scheduler)
 	api := r.Group("/api", middleware.JWTAuth(db), middleware.BlockPlatformKey())
 	{
 		api.GET("/apikeys", apiKeyHandler.List)
@@ -119,14 +119,21 @@ func main() {
 		api.GET("/dashboard/stats", dashboardHandler.GetStats)
 		api.GET("/dashboard/charts", dashboardHandler.GetChartData)
 		api.GET("/dashboard/logs", dashboardHandler.GetRequestLogs)
+		api.GET("/settings", dashboardHandler.GetAllSettings)
+		api.PUT("/settings", dashboardHandler.SaveAllSettings)
+		// Legacy per-field endpoints (kept for backward compatibility)
 		api.GET("/settings/strategy", dashboardHandler.GetStrategy)
 		api.PUT("/settings/strategy", dashboardHandler.SetStrategy)
 		api.GET("/settings/tick", dashboardHandler.GetTick)
 		api.PUT("/settings/tick", dashboardHandler.SetTick)
 		api.GET("/settings/poll", dashboardHandler.GetPollConfig)
 		api.PUT("/settings/poll", dashboardHandler.SetPollConfig)
-
+		api.GET("/settings/local-timeout", dashboardHandler.GetLocalTimeout)
+		api.PUT("/settings/local-timeout", dashboardHandler.SetLocalTimeout)
 		api.GET("/apps", dashboardHandler.GetApps)
+
+		api.GET("/uploads", proxyHandler.ListUploads)
+		api.GET("/uploads/resolve", proxyHandler.GetUploadByName)
 
 		api.GET("/platform-keys", platformKeyHandler.List)
 		api.POST("/platform-keys", platformKeyHandler.Create)
@@ -135,7 +142,6 @@ func main() {
 	}
 
 	// --- RunningHub-compatible proxy (JWT + platform key both allowed) ---
-	proxyHandler := handlers.NewProxyHandler(db, rhClient, scheduler)
 	proxy := r.Group("", middleware.JWTAuth(db))
 	{
 		proxy.POST("/task/openapi/ai-app/run", proxyHandler.CreateTask)
@@ -151,7 +157,7 @@ func main() {
 	r.Static("/files", cfg.OutputDir)
 
 	// Serve uploaded files (auth required)
-	uploadsGroup := r.Group("/uploads", middleware.JWTAuth(db))
+	uploadsGroup := r.Group("/uploaded", middleware.JWTAuth(db))
 	uploadsGroup.Static("/", cfg.UploadDir)
 
 	// Serve frontend static files (production)
