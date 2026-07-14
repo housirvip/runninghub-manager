@@ -46,6 +46,44 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
 const tabs = ['', 'PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED']
 const tabLabels = ['全部', '等待中', '运行中', '成功', '失败', '已取消']
 
+// 格式化时长（毫秒 -> 可读字符串）
+function formatDuration(ms: number): string {
+  if (ms < 0) ms = 0
+  const totalSec = Math.floor(ms / 1000)
+  if (totalSec < 60) return `${totalSec}秒`
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  if (min < 60) return sec ? `${min}分${sec}秒` : `${min}分`
+  const hour = Math.floor(min / 60)
+  const remMin = min % 60
+  return remMin ? `${hour}时${remMin}分` : `${hour}时`
+}
+
+// 等待时间：创建 -> 调度（未调度则至今，仍在等待）
+function getWaitDuration(task: TaskItem): string | null {
+  const start = new Date(task.createdAt).getTime()
+  if (task.dispatchedAt) {
+    return formatDuration(new Date(task.dispatchedAt).getTime() - start)
+  }
+  if (['PENDING', 'QUEUED'].includes(task.status)) {
+    return `${formatDuration(Date.now() - start)}(进行中)`
+  }
+  return null
+}
+
+// 执行时间：调度 -> 完成（已调度未完成则至今，仍在运行）
+function getExecDuration(task: TaskItem): string | null {
+  if (!task.dispatchedAt) return null
+  const start = new Date(task.dispatchedAt).getTime()
+  if (task.completedAt) {
+    return formatDuration(new Date(task.completedAt).getTime() - start)
+  }
+  if (['RUNNING', 'DISPATCHED'].includes(task.status)) {
+    return `${formatDuration(Date.now() - start)}(进行中)`
+  }
+  return null
+}
+
 export function TasksPage() {
   const [tasks, setTasks] = useState<TaskListResponse | null>(null)
   const [status, setStatus] = useState('')
@@ -142,8 +180,10 @@ export function TasksPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    WebApp ID: {task.webappId}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span>WebApp ID: {task.webappId}</span>
+                    {getWaitDuration(task) && <span>等待: {getWaitDuration(task)}</span>}
+                    {getExecDuration(task) && <span>执行: {getExecDuration(task)}</span>}
                   </div>
                 </CardContent>
               </Card>
@@ -224,6 +264,18 @@ export function TasksPage() {
                   <div>
                     <span className="text-muted-foreground">完成时间:</span>
                     <p>{new Date(selectedTask.completedAt).toLocaleString()}</p>
+                  </div>
+                )}
+                {getWaitDuration(selectedTask) && (
+                  <div>
+                    <span className="text-muted-foreground">等待时间:</span>
+                    <p>{getWaitDuration(selectedTask)}</p>
+                  </div>
+                )}
+                {getExecDuration(selectedTask) && (
+                  <div>
+                    <span className="text-muted-foreground">执行时间:</span>
+                    <p>{getExecDuration(selectedTask)}</p>
                   </div>
                 )}
               </div>
