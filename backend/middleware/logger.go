@@ -17,7 +17,7 @@ func RequestLogger(db *gorm.DB) gin.HandlerFunc {
 
 		// Skip paths that generate noise (static files, dashboard self-polling, settings reads)
 		if strings.HasPrefix(path, "/files/") ||
-			strings.HasPrefix(path, "/uploads/") ||
+			strings.HasPrefix(path, "/uploaded/") ||
 			strings.HasPrefix(path, "/assets/") ||
 			strings.HasPrefix(path, "/api/dashboard/") ||
 			strings.HasPrefix(path, "/api/settings/") ||

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -132,6 +134,35 @@ func (e *LocalExecutor) processTask(taskID uint) {
 		return
 	}
 
+	// Resolve remote files: download from URL if file is not local
+	for _, node := range nodeInfoList {
+		fileName := string(node.FieldValue)
+		if fileName == "" {
+			continue
+		}
+		// Check if this fileName exists in uploads table as a remote file
+		var upload models.Upload
+		if err := e.db.Where("file_name = ? AND is_local = ?", fileName, false).First(&upload).Error; err != nil {
+			continue // not a remote upload record, skip
+		}
+		// Download if not already cached locally
+		localName := filepath.Base(fileName)
+		localPath := filepath.Join(e.uploadDir, localName)
+		if _, err := os.Stat(localPath); err == nil {
+			continue // already exists locally
+		}
+		if upload.URL == "" {
+			e.failTask(taskID, fmt.Sprintf("remote file %s has no download URL", fileName))
+			return
+		}
+		log.Printf("[LocalExecutor] Downloading remote file: %s", fileName)
+		if err := e.downloadFile(upload.URL, localPath); err != nil {
+			e.failTask(taskID, fmt.Sprintf("failed to download remote file %s: %v", fileName, err))
+			return
+		}
+		log.Printf("[LocalExecutor] Downloaded: %s -> %s", fileName, localPath)
+	}
+
 	// Create task-specific output directory
 	taskOutputDir := filepath.Join(e.outputDir, fmt.Sprintf("task-%d", taskID))
 	if err := os.MkdirAll(taskOutputDir, 0755); err != nil {
@@ -179,4 +210,32 @@ func (e *LocalExecutor) failTask(taskID uint, errMsg string) {
 		"completed_at":  now,
 	})
 	log.Printf("[LocalExecutor] Task %d failed: %s", taskID, errMsg)
+}
+
+func (e *LocalExecutor) downloadFile(url, destPath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("HTTP GET: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("create dir: %w", err)
+	}
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }

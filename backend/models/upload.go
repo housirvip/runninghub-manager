@@ -10,6 +10,6 @@ type Upload struct {
 	FileType     string    `gorm:"size:32;not null" json:"fileType"`
 	FileSize     int64     `json:"fileSize"`
 	URL          string    `gorm:"size:1024;not null" json:"url"`
-	IsLocal      bool      `gorm:"default:true" json:"isLocal"`
+	IsLocal      bool      `json:"isLocal"`
 	CreatedAt    time.Time `json:"createdAt"`
 }

@@ -157,7 +157,7 @@ func main() {
 	r.Static("/files", cfg.OutputDir)
 
 	// Serve uploaded files (auth required)
-	uploadsGroup := r.Group("/uploads", middleware.JWTAuth(db))
+	uploadsGroup := r.Group("/uploaded", middleware.JWTAuth(db))
 	uploadsGroup.Static("/", cfg.UploadDir)
 
 	// Serve frontend static files (production)

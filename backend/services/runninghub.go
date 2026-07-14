@@ -158,9 +158,6 @@ func (c *RHClient) UploadFile(apiKey string, fileType string, file multipart.Fil
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	_ = writer.WriteField("apiKey", apiKey)
-	_ = writer.WriteField("fileType", fileType)
-
 	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
 		return nil, fmt.Errorf("create form file: %w", err)
@@ -170,12 +167,13 @@ func (c *RHClient) UploadFile(apiKey string, fileType string, file multipart.Fil
 	}
 	writer.Close()
 
-	httpReq, err := http.NewRequest("POST", c.BaseURL+"/task/openapi/upload", &buf)
+	httpReq, err := http.NewRequest("POST", c.BaseURL+"/openapi/v2/media/upload/binary", &buf)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 	httpReq.Header.Set("Host", c.host())
+	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {

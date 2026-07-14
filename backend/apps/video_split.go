@@ -68,15 +68,15 @@ func (a *VideoSplitApp) Execute(ctx context.Context, input AppInput) (*AppResult
 	for _, node := range input.NodeInfoList {
 		switch node.FieldName {
 		case "video":
-			videoFile = node.FieldValue
+			videoFile = string(node.FieldValue)
 		case "mode":
-			mode = node.FieldValue
+			mode = string(node.FieldValue)
 		case "segments":
-			if n, err := strconv.Atoi(node.FieldValue); err == nil && n > 0 {
+			if n, err := strconv.Atoi(string(node.FieldValue)); err == nil && n > 0 {
 				segments = n
 			}
 		case "duration":
-			if f, err := strconv.ParseFloat(node.FieldValue, 64); err == nil && f > 0 {
+			if f, err := strconv.ParseFloat(string(node.FieldValue), 64); err == nil && f > 0 {
 				segDuration = f
 			}
 		}

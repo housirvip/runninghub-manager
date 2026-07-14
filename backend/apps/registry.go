@@ -1,6 +1,9 @@
 package apps
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // AppInput is the input passed to a custom app's Execute method.
 type AppInput struct {
@@ -12,9 +15,36 @@ type AppInput struct {
 
 // NodeInfo is used for task execution input parsing.
 type NodeInfo struct {
-	NodeID     string `json:"nodeId"`
-	FieldName  string `json:"fieldName"`
-	FieldValue string `json:"fieldValue"`
+	NodeID     string      `json:"nodeId"`
+	FieldName  string      `json:"fieldName"`
+	FieldValue FlexString  `json:"fieldValue"`
+}
+
+// FlexString is a string that can unmarshal from any JSON scalar (string, number, bool, null).
+type FlexString string
+
+func (f *FlexString) UnmarshalJSON(data []byte) error {
+	// Try string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*f = FlexString(s)
+		return nil
+	}
+	// Fall back to raw representation for numbers/bools
+	var raw json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*f = FlexString(string(raw))
+	return nil
+}
+
+func (f FlexString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(f))
+}
+
+func (f FlexString) String() string {
+	return string(f)
 }
 
 // NodeInfoSchema describes an input field for apiCallDemo responses.

@@ -240,7 +240,7 @@ func (h *ProxyHandler) Upload(c *gin.Context) {
 			FileName:     fileName,
 			FileType:     fileType,
 			FileSize:     header.Size,
-			URL:          config.AppConfig.BaseURL + "/uploads/" + fileName,
+			URL:          config.AppConfig.BaseURL + "/uploaded/" + fileName,
 			IsLocal:      true,
 		}
 		if err := h.DB.Create(&uploadRecord).Error; err != nil {
