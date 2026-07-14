@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"runninghub-manager/apps"
+	"runninghub-manager/config"
 	"runninghub-manager/models"
 
 	"gorm.io/gorm"
@@ -146,12 +147,14 @@ func (e *LocalExecutor) processTask(taskID uint) {
 		BaseURL:      e.baseURL,
 	}
 
-	// Execute with 10-minute timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Execute with configurable timeout (default 60 minutes)
+	timeout := time.Duration(config.AppConfig.GetLocalTaskTimeout()) * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	appResult, err := app.Execute(ctx, input)
 	if err != nil {
+		os.RemoveAll(taskOutputDir) // clean up partial output files
 		e.failTask(taskID, err.Error())
 		return
 	}

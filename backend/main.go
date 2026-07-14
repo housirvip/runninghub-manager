@@ -119,13 +119,17 @@ func main() {
 		api.GET("/dashboard/stats", dashboardHandler.GetStats)
 		api.GET("/dashboard/charts", dashboardHandler.GetChartData)
 		api.GET("/dashboard/logs", dashboardHandler.GetRequestLogs)
+		api.GET("/settings", dashboardHandler.GetAllSettings)
+		api.PUT("/settings", dashboardHandler.SaveAllSettings)
+		// Legacy per-field endpoints (kept for backward compatibility)
 		api.GET("/settings/strategy", dashboardHandler.GetStrategy)
 		api.PUT("/settings/strategy", dashboardHandler.SetStrategy)
 		api.GET("/settings/tick", dashboardHandler.GetTick)
 		api.PUT("/settings/tick", dashboardHandler.SetTick)
 		api.GET("/settings/poll", dashboardHandler.GetPollConfig)
 		api.PUT("/settings/poll", dashboardHandler.SetPollConfig)
-
+		api.GET("/settings/local-timeout", dashboardHandler.GetLocalTimeout)
+		api.PUT("/settings/local-timeout", dashboardHandler.SetLocalTimeout)
 		api.GET("/apps", dashboardHandler.GetApps)
 
 		api.GET("/platform-keys", platformKeyHandler.List)

@@ -159,6 +159,35 @@ func (h *DashboardHandler) SetPollConfig(c *gin.Context) {
 	})
 }
 
+func (h *DashboardHandler) GetLocalTimeout(c *gin.Context) {
+	pkg.Success(c, gin.H{
+		"localTaskTimeout": config.AppConfig.GetLocalTaskTimeout(),
+	})
+}
+
+func (h *DashboardHandler) SetLocalTimeout(c *gin.Context) {
+	var req struct {
+		LocalTaskTimeout int `json:"localTaskTimeout" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if req.LocalTaskTimeout < 1 || req.LocalTaskTimeout > 1440 {
+		pkg.Error(c, http.StatusBadRequest, "localTaskTimeout must be between 1 and 1440 minutes")
+		return
+	}
+
+	config.AppConfig.SetLocalTaskTimeout(req.LocalTaskTimeout)
+	if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyLocalTaskTimeout, strconv.Itoa(req.LocalTaskTimeout)); err != nil {
+		log.Printf("warn: persist setting %s: %v", config.SettingKeyLocalTaskTimeout, err)
+	}
+	pkg.Success(c, gin.H{
+		"localTaskTimeout": config.AppConfig.GetLocalTaskTimeout(),
+	})
+}
+
 func (h *DashboardHandler) GetApps(c *gin.Context) {
 	appList := apps.List()
 	result := make([]gin.H, 0, len(appList))
@@ -308,5 +337,96 @@ func (h *DashboardHandler) GetRequestLogs(c *gin.Context) {
 		"total":    total,
 		"page":     page,
 		"pageSize": pageSize,
+	})
+}
+
+// GetAllSettings returns all runtime settings in one response.
+func (h *DashboardHandler) GetAllSettings(c *gin.Context) {
+	pkg.Success(c, gin.H{
+		"strategy":         string(config.AppConfig.GetStrategy()),
+		"tickMs":           config.AppConfig.GetSchedulerTick(),
+		"pollInterval":     config.AppConfig.GetPollInterval(),
+		"pollMaxAttempts":  config.AppConfig.GetPollMaxAttempts(),
+		"localTaskTimeout": config.AppConfig.GetLocalTaskTimeout(),
+	})
+}
+
+// SaveAllSettings accepts a partial or full set of settings and persists them.
+func (h *DashboardHandler) SaveAllSettings(c *gin.Context) {
+	var req struct {
+		Strategy         *string `json:"strategy"`
+		TickMs           *int    `json:"tickMs"`
+		PollInterval     *int    `json:"pollInterval"`
+		PollMaxAttempts  *int    `json:"pollMaxAttempts"`
+		LocalTaskTimeout *int    `json:"localTaskTimeout"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		pkg.Error(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if req.Strategy != nil {
+		s := config.ScheduleStrategy(*req.Strategy)
+		if s != config.StrategyLeastLoaded && s != config.StrategyFillFirst {
+			pkg.Error(c, http.StatusBadRequest, "invalid strategy, must be 'least-loaded' or 'fill-first'")
+			return
+		}
+		config.AppConfig.SetStrategy(s)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyStrategy, *req.Strategy); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyStrategy, err)
+		}
+	}
+
+	if req.TickMs != nil {
+		if *req.TickMs < 100 || *req.TickMs > 60000 {
+			pkg.Error(c, http.StatusBadRequest, "tickMs must be between 100 and 60000")
+			return
+		}
+		config.AppConfig.SetSchedulerTick(*req.TickMs)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyTick, strconv.Itoa(*req.TickMs)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyTick, err)
+		}
+		h.Scheduler.SetTick(*req.TickMs)
+	}
+
+	if req.PollInterval != nil {
+		if *req.PollInterval < 1 || *req.PollInterval > 60 {
+			pkg.Error(c, http.StatusBadRequest, "pollInterval must be between 1 and 60 seconds")
+			return
+		}
+		config.AppConfig.SetPollInterval(*req.PollInterval)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyPollInterval, strconv.Itoa(*req.PollInterval)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyPollInterval, err)
+		}
+	}
+
+	if req.PollMaxAttempts != nil {
+		if *req.PollMaxAttempts < 1 || *req.PollMaxAttempts > 10000 {
+			pkg.Error(c, http.StatusBadRequest, "pollMaxAttempts must be between 1 and 10000")
+			return
+		}
+		config.AppConfig.SetPollMaxAttempts(*req.PollMaxAttempts)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyPollMaxAttempts, strconv.Itoa(*req.PollMaxAttempts)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyPollMaxAttempts, err)
+		}
+	}
+
+	if req.LocalTaskTimeout != nil {
+		if *req.LocalTaskTimeout < 1 || *req.LocalTaskTimeout > 1440 {
+			pkg.Error(c, http.StatusBadRequest, "localTaskTimeout must be between 1 and 1440 minutes")
+			return
+		}
+		config.AppConfig.SetLocalTaskTimeout(*req.LocalTaskTimeout)
+		if err := config.AppConfig.SaveSetting(h.DB, config.SettingKeyLocalTaskTimeout, strconv.Itoa(*req.LocalTaskTimeout)); err != nil {
+			log.Printf("warn: persist setting %s: %v", config.SettingKeyLocalTaskTimeout, err)
+		}
+	}
+
+	pkg.Success(c, gin.H{
+		"strategy":         string(config.AppConfig.GetStrategy()),
+		"tickMs":           config.AppConfig.GetSchedulerTick(),
+		"pollInterval":     config.AppConfig.GetPollInterval(),
+		"pollMaxAttempts":  config.AppConfig.GetPollMaxAttempts(),
+		"localTaskTimeout": config.AppConfig.GetLocalTaskTimeout(),
 	})
 }
