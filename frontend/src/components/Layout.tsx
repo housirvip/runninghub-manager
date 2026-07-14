@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '仪表盘' },
-  { to: '/apikeys', icon: Key, label: 'API Keys' },
+  { to: '/apikeys', icon: Key, label: 'RH API' },
   { to: '/platform-keys', icon: KeyRound, label: '平台密钥' },
   { to: '/tasks', icon: ListTodo, label: '任务列表' },
   { to: '/settings', icon: Settings, label: '系统设置' },

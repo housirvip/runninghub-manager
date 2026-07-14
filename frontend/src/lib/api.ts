@@ -62,12 +62,14 @@ export const dashboardApi = {
 
 // Settings
 export const settingsApi = {
-  getStrategy: () => api.get('/api/settings/strategy'),
-  setStrategy: (strategy: string) => api.put('/api/settings/strategy', { strategy }),
-  getTick: () => api.get('/api/settings/tick'),
-  setTick: (tickMs: number) => api.put('/api/settings/tick', { tickMs }),
-  getPoll: () => api.get('/api/settings/poll'),
-  setPoll: (data: { pollInterval?: number; pollMaxAttempts?: number }) => api.put('/api/settings/poll', data),
+  getAll: () => api.get('/api/settings'),
+  saveAll: (data: {
+    strategy?: string
+    tickMs?: number
+    pollInterval?: number
+    pollMaxAttempts?: number
+    localTaskTimeout?: number
+  }) => api.put('/api/settings', data),
 }
 
 
