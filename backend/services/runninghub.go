@@ -80,11 +80,13 @@ type QueryTaskResponse struct {
 
 // UploadResponse matches RunningHub's upload response
 type UploadResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data *struct {
-		FileName string `json:"fileName"`
-		FileType string `json:"fileType"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    *struct {
+		Type        string `json:"type"`
+		DownloadURL string `json:"download_url"`
+		FileName    string `json:"fileName"`
+		Size        string `json:"size"`
 	} `json:"data"`
 }
 

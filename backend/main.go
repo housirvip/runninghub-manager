@@ -104,7 +104,7 @@ func main() {
 	taskHandler := handlers.NewTaskHandler(db, rhClient)
 	dashboardHandler := handlers.NewDashboardHandler(db, scheduler)
 	platformKeyHandler := handlers.NewPlatformKeyHandler(db)
-
+	proxyHandler := handlers.NewProxyHandler(db, rhClient, scheduler)
 	api := r.Group("/api", middleware.JWTAuth(db), middleware.BlockPlatformKey())
 	{
 		api.GET("/apikeys", apiKeyHandler.List)
@@ -132,6 +132,9 @@ func main() {
 		api.PUT("/settings/local-timeout", dashboardHandler.SetLocalTimeout)
 		api.GET("/apps", dashboardHandler.GetApps)
 
+		api.GET("/uploads", proxyHandler.ListUploads)
+		api.GET("/uploads/resolve", proxyHandler.GetUploadByName)
+
 		api.GET("/platform-keys", platformKeyHandler.List)
 		api.POST("/platform-keys", platformKeyHandler.Create)
 		api.DELETE("/platform-keys/:id", platformKeyHandler.Delete)
@@ -139,7 +142,6 @@ func main() {
 	}
 
 	// --- RunningHub-compatible proxy (JWT + platform key both allowed) ---
-	proxyHandler := handlers.NewProxyHandler(db, rhClient, scheduler)
 	proxy := r.Group("", middleware.JWTAuth(db))
 	{
 		proxy.POST("/task/openapi/ai-app/run", proxyHandler.CreateTask)

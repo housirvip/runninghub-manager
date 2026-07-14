@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Key, KeyRound, ListTodo, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Key, KeyRound, ListTodo, Upload, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/apikeys', icon: Key, label: 'RH API' },
   { to: '/platform-keys', icon: KeyRound, label: '平台密钥' },
   { to: '/tasks', icon: ListTodo, label: '任务列表' },
+  { to: '/uploads', icon: Upload, label: '上传文件' },
   { to: '/settings', icon: Settings, label: '系统设置' },
 ]
 

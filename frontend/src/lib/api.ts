@@ -78,6 +78,14 @@ export const appsApi = {
   list: () => api.get('/api/apps'),
 }
 
+// Uploads
+export const uploadsApi = {
+  list: (params?: { page?: number; pageSize?: number; search?: string }) =>
+    api.get('/api/uploads', { params }),
+  resolve: (fileName: string) =>
+    api.get('/api/uploads/resolve', { params: { fileName } }),
+}
+
 // Platform Keys
 export const platformKeyApi = {
   list: () => api.get('/api/platform-keys'),
