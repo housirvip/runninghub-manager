@@ -180,10 +180,26 @@ export function TasksPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
                     <span>WebApp ID: {task.webappId}</span>
-                    {getWaitDuration(task) && <span>等待: {getWaitDuration(task)}</span>}
-                    {getExecDuration(task) && <span>执行: {getExecDuration(task)}</span>}
+                    {getWaitDuration(task) && (() => {
+                      const waiting = ['PENDING', 'QUEUED'].includes(task.status) && !task.dispatchedAt
+                      return (
+                        <Badge variant="outline" className={`bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900 ${waiting ? 'animate-pulse' : ''}`}>
+                          {waiting && <span className="mr-1 inline-block size-1.5 rounded-full bg-amber-500 animate-ping" />}
+                          等待 {getWaitDuration(task)}
+                        </Badge>
+                      )
+                    })()}
+                    {getExecDuration(task) && (() => {
+                      const running = ['RUNNING', 'DISPATCHED'].includes(task.status) && !task.completedAt
+                      return (
+                        <Badge variant="outline" className={`bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900 ${running ? 'animate-pulse' : ''}`}>
+                          {running && <span className="mr-1 inline-block size-1.5 rounded-full bg-blue-500 animate-ping" />}
+                          执行 {getExecDuration(task)}
+                        </Badge>
+                      )
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -266,18 +282,34 @@ export function TasksPage() {
                     <p>{new Date(selectedTask.completedAt).toLocaleString()}</p>
                   </div>
                 )}
-                {getWaitDuration(selectedTask) && (
-                  <div>
-                    <span className="text-muted-foreground">等待时间:</span>
-                    <p>{getWaitDuration(selectedTask)}</p>
-                  </div>
-                )}
-                {getExecDuration(selectedTask) && (
-                  <div>
-                    <span className="text-muted-foreground">执行时间:</span>
-                    <p>{getExecDuration(selectedTask)}</p>
-                  </div>
-                )}
+                {getWaitDuration(selectedTask) && (() => {
+                  const waiting = ['PENDING', 'QUEUED'].includes(selectedTask.status) && !selectedTask.dispatchedAt
+                  return (
+                    <div>
+                      <span className="text-muted-foreground">等待时间:</span>
+                      <p className="mt-0.5">
+                        <Badge variant="outline" className={`bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900 ${waiting ? 'animate-pulse' : ''}`}>
+                          {waiting && <span className="mr-1 inline-block size-1.5 rounded-full bg-amber-500 animate-ping" />}
+                          {getWaitDuration(selectedTask)}
+                        </Badge>
+                      </p>
+                    </div>
+                  )
+                })()}
+                {getExecDuration(selectedTask) && (() => {
+                  const running = ['RUNNING', 'DISPATCHED'].includes(selectedTask.status) && !selectedTask.completedAt
+                  return (
+                    <div>
+                      <span className="text-muted-foreground">执行时间:</span>
+                      <p className="mt-0.5">
+                        <Badge variant="outline" className={`bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900 ${running ? 'animate-pulse' : ''}`}>
+                          {running && <span className="mr-1 inline-block size-1.5 rounded-full bg-blue-500 animate-ping" />}
+                          {getExecDuration(selectedTask)}
+                        </Badge>
+                      </p>
+                    </div>
+                  )
+                })()}
               </div>
 
               {selectedTask.errorMessage && (
